@@ -1,0 +1,149 @@
+---
+title: "MA304 Assignment 1"
+output:
+  html_document: 
+    df_print: paged
+
+header-includes:
+    - \usepackage{setspace}
+    - \singlespacing    
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, fig.cap = " ")
+```
+
+###**INTRODUCTION**
+
+The data consist of 2383 incidences with available information on 47 variables in the city of Dallas. The purpose of this report is to understand the factors that will affect the policing equity. The primary focus of Policing equity is to bridge the gap created by issues of communication, suffering and generational distrust, and to forge a path to public health and safety, trust in the community and racial equality.
+The use of the different approaches and the relationship between variables have been clarified in this study. Importing the dataset and providing a basic understanding of the dataset is always the first step of the data analysis. The next step is to analyze the data set using various variables and then use graphs to illustrate the relationship between those variables.  
+
+```{r include = FALSE}
+library("base")
+library("ggplot2")
+library("ggrepel")
+library("dplyr")
+library("plotly")
+library("lubridate")
+library("tidyverse")
+library("tinytex")
+library("scales")
+```
+
+```{r include = FALSE}
+data <- read.csv("C:/Users/acer/Desktop/MA304/Dept_37-00049/37-00049_UOF-P_2016_prepped_final.csv", stringsAsFactors=TRUE)     #removed second row already
+View(data) ;dim(data)
+names(data) ; class(data)
+#attributes(data) ; #names(data)
+#data=as.data.frame(data) ; #head(data)
+summary(data) ; str(data)
+```
+
+```{r fig_1 ,out.width  =  "50%", fig.align='center'}
+data$INCIDENT_DATE <- as.Date(data$INCIDENT_DATE, "%d/%m/%Y")
+View(data$INCIDENT_DATE)
+#class(data$INCIDENT_DATE)
+
+# form new data frame to take count against each date
+daily_incidents<- data %>%
+   group_by(INCIDENT_DATE) %>%
+   summarize(count = n()) %>%
+   arrange(INCIDENT_DATE)
+
+View(daily_incidents)
+
+# Line graph for Daily incidents
+ggplot(daily_incidents, aes(x = INCIDENT_DATE, y = count)) +geom_line(color = "yellow", size = 0.1) +geom_smooth(formula = y ~ x,method = "loess",color = "blue")  +
+  labs(x = "Date of Incidents", y = "Number of Incidents", title = "Daily Incidents in Dallas in 2016")
+```
+
+
+The graph in figure (1) shows the number of incidents of offences in Dallas in the year 2016.  It is evident, as an overall trend, that the number of incidences increased relatively rapidly until March, and then began to decrease speedily until mid-2016. For almost a quarter, this pattern remained steady before dropping at a very high pace until December. By the end of the year, very few incidences of offense were recorded.  
+
+```{r,out.width  =  "50%",fig.align='center'}
+#plot for subject decription
+data_Subject = sort(table(data$SUBJECT_DESCRIPTION),decreasing = TRUE)
+data_Subject = data.frame(data_Subject)
+#df_category = data.frame(df_category[df_category > 10000])
+colnames(data_Subject) = c("Subject", "Frequency")
+data_Subject$Percentage = data_Subject$Frequency / sum(data_Subject$Frequency)
+View(data_Subject)
+
+ggplot(data_Subject, aes(x=Subject, y=Frequency, fill=Subject)) + geom_bar(stat="identity") + 
+  theme(axis.text.x=element_blank())+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=0.5)) +labs(title = "Description of Subject Offenses",x="Type of offenses")
+```
+
+
+Figure (2) strongly indicates that most of the listed subjects were mentally unstable. There were significant numbers of people who were addicted to alcohol, followed by people who were addicted to drugs and to marijuana. 
+
+```{r, fig-sub, figures-side, fig.show="hold", out.width="50%"}
+library("ggplot2")
+#plot of Officer and subject Race-Gender
+officer_gender_race = ggplot(data,aes(x=OFFICER_RACE,group=OFFICER_GENDER))+geom_bar(aes(fill=OFFICER_GENDER),alpha=0.5)+ labs(title="Officer : Race - Gender",x="Officer Race")
+officer_gender_race
+subject_gender_race = ggplot(data,aes(x=SUBJECT_RACE,group=SUBJECT_GENDER))+geom_bar(aes(fill=SUBJECT_GENDER),alpha=0.5)+ labs(title="Subject : Race - Gender", x="Subject race")
+subject_gender_race
+```
+
+
+Figure (3) demonstrates the gaps in racial and gender equality. Compared to all other races, there is a majority of white officers irrespective of gender. Moreover count of male officer for every type of race is significantly high as compared to female officer. Count of white people is less as compared to black race people. On the other hand, the gender and racial equality for the subjects reported by officers are clarified in the right figure.. Majority of black race subjects were reported by oficers in Dallas. However,the percentage of white citizens is smaller than that of the black race people.  
+
+
+
+```{r ,out.width  =  "40%", fig.align='center'}
+#histogram for service in years
+ggplot(data, aes(OFFICER_YEARS_ON_FORCE)) + 
+  geom_histogram(binwidth=1,color="black",fill="#756bb1",aes(y=..density..))+ 
+  ggtitle("OFFICER_YEARS_ON_FORCE") + xlab("OFFICER YEARS ON FORCE") + 
+  xlim(0,50)+geom_density(colour="red",size=1)
+```
+
+
+From the histogram showed in figure (4), It indicates that most of the officers performed their duties for 10 years at the most. The highest years served by the officers was beween 2-5 years. But very few officers have performed their duties as officers for a long time. The histogram above has positive skewness.  
+  
+  
+```{r, out.width='50%',fig.width=8,fig.height=5,fig.show='hold',fig.align='center'}
+#Plot for showing racism
+ggplot(data,aes(x=SUBJECT_RACE,group=OFFICER_RACE))+geom_bar(aes(fill=OFFICER_RACE),alpha=0.5)+ labs(title="Race - Gender (by subject)",x="Race of Subject")
+
+ggplot(data,aes(x=OFFICER_RACE,group=SUBJECT_RACE))+geom_bar(aes(fill=SUBJECT_RACE),alpha=0.5)+ labs(title="Race - Gender (by Officer)",x="Race of Officer")
+
+```
+
+
+From the above bar graph shown in figure (5), its very clear that Black people were reported highly by all type of officer race irrespective of gender. However, White officers reported high count of black subjects. This shows racism in city of Dallas. As we have already seen earlier, white officers were more as compared to other races, the probability of reporting any offense by any type of race was always low than that of white officers. However, bar plot in right figure is nothing but the reverse way of explaining the figure (f). It also shows white officers reported majority of offenses in Dallas and high offenses by black peoples.  
+
+
+```{r, fig.align='center',out.width  =  "50%"}
+#Pie chart for division wise crime
+count_division = data.frame(table(data$DIVISION))
+pct = round(count_division$Freq/sum(count_division$Freq)*100)
+lbs = paste(count_division$Var1,pct)
+lbs = paste(lbs,"%",sep = "")
+pie(count_division$Freq,labels = lbs, col = c("cadetblue3","chocolate1"),  main = "COUNT PER DIVISION")
+```
+
+
+Figure (6) shows a pie chart stating number of offenses reported in Area divisions of Dallas city.It indicates that there were & different divisions in Dallas, out of which Central division has seen many offenses followed by Southeast Division. Very few (8%) of offenses were reported in Northwest division. So Central division possesses high number of mentally ill and alcohol addicts.  
+
+
+```{r include=FALSE}
+## **BASIC PLOTS FOR OFFICER GENDER AND SUBJECT GENDER**
+
+gender_off=data$OFFICER_GENDER
+race_off=data$OFFICER_RACE
+gender_sub=data$SUBJECT_GENDER
+race_sub=data$SUBJECT_RACE
+
+#single variable plot
+par(mfrow=c(2,1))
+plot(race_off,xlab="Officer Race")
+plot(race_sub,xlab="Subject Race")
+par(mfrow=c(1,2))
+plot(gender_off,xlab="Officer Gender")
+plot(gender_sub,xlab="Subject Gender")
+```
+
+##Conclusion
+
+In the city of Dallas, there have been numerous forms of reported incidents, where bias can be seen very clearly as white officers appear to predominantly report black people. Gender disparity has also arisen as male officers and subjects were more comparable to female officers. Dallas City's Central Division has reported the largest number of crimes, including alcohol and drugs abuse and mental illness. But the number of incidents has declined dramatically over the year, so we can assume that the police department does a reasonably decent job, even though they need to look at gender and racial equality.  
