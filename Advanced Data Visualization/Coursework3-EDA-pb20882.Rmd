@@ -1,0 +1,444 @@
+---
+title: "Data Visualization of Policing Equity Data (Dallas)"
+author: "Priyanka Bhagwat"
+output: 
+  html_document:
+        code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,warning = FALSE,fig.align='center')
+```
+
+```{r,include=FALSE}
+#load required libraries
+library(dsEssex)  ;   library(tinytex)
+library(ggplot2)  ;   library(tidyr)
+library(tidyverse);   library(dplyr)
+library(car)      ;   library(scales)
+library(lubridate);   library(base)
+library(plotly)   ;   library(rgdal)
+library(sf)       ;   library(ggmap)
+library(viridis)  ;   library(ggthemes)
+library(highcharter) ;library(gridExtra)
+
+#For Coloring and Breaks
+library(classInt) ; library(RColorBrewer) ; library(tmap)
+```
+
+```{r,include=FALSE}
+data= read.csv("D:/MA304/37-00049_UOF-P_2016_prepped.csv")
+data=data[-1,-c(3,4,12)]     #removing rows and columns which are not needed for the analysis
+#head(data) ;#view(data)
+summary(data); str(data) ;dim(data)
+
+#########################################################################################################################################
+###########################################################PRE-PROCESSING################################################################
+
+#converting class of date from char to date
+data$INCIDENT_DATE
+data$INCIDENT_DATE <- as.Date(data$INCIDENT_DATE, format = "%m/%d/%Y")
+data$INCIDENT_DATE <- gsub("00","20",data$INCIDENT_DATE)
+data$INCIDENT_DATE <- as.Date(data$INCIDENT_DATE, format = "%Y-%m-%d")
+data$INCIDENT_TIME <- format(strptime(data$INCIDENT_TIME, "%I:%M:%S %p"), "%H:%M:%S")
+data$INCIDENT_MONTH <- months(as.Date(data$INCIDENT_DATE))
+data$INC_MONTH <-format(data$INCIDENT_DATE,"%m")
+data$INCIDENT_HOUR <- as.numeric(substr(data$INCIDENT_TIME, 0, 2))
+data$INCIDENT_DAY <- wday(data$INCIDENT_DATE, label=TRUE)
+data$INC_HOUR <- substr(data$INCIDENT_TIME, 0, 2)
+data$INC_DATE <- substr(data$INCIDENT_DATE, 9, 10)
+
+# Create group of datas:
+data_year <-  data %>%
+  group_by(INCIDENT_DATE,INCIDENT_MONTH,INCIDENT_DAY) %>%
+  summarize(count = n())
+data_month <-  data %>%
+  group_by(INC_MONTH) %>%
+  summarize(count = n())
+
+#checking incident counts per division
+table(data$DIVISION)
+
+#line graph of date Vs total number of victims over the years
+#data %>% ggplot(aes(x=Date, y= ))+geom_line()
+
+#Checking and modifying Officer Gender and Subject Gender columns
+data$SUBJECT_GENDER= recode(data$SUBJECT_GENDER,"c('NULL','Unknown')='Unknown'")
+table(data$OFFICER_GENDER)
+table(data$SUBJECT_GENDER)
+
+#install.packages("car")
+#Checking and modifying Officer Injury Type column
+data$OFFICER_INJURY_TYPE<-recode(data$OFFICER_INJURY_TYPE,"c('Abrasion/Scrape','Abrasion/Scrape, Bite, Sprain/Strain','Abrasion/Scrape, Bruise','Abrasion/Scrape, Bruise, HEADBUT (HEADACHE)','Abrasion/Scrape, Bruise, Sore throat, excessive cough','Abrasion/Scrape, Bruise, stunned','Abrasion/Scrape, discomfort, Pain','Abrasion/Scrape, Elevated Heart Rate, Fatigue, Dizziness','Abrasion/Scrape, Fatigue',
+'Abrasion/Scrape, Fluid Exposure','Abrasion/Scrape, Laceration/Cut','Abrasion/Scrape, Laceration/Cut, Bruise', 'Abrasion/Scrape, Laceration/Cut, Elevated Heart Rate, Fatigue, Redness/Swelling, Bruise','Abrasion/Scrape, pain','Abrasion/Scrape, Redness/Swelling',     'Abrasion/Scrape, Redness/Swelling, Laceration/Cut','Abrasion/Scrape, Redness/Swelling,Sprain/Strain','Abrasion/Scrape, Sprain/Strain')='Abrasion'")                        
+                                 
+data$OFFICER_INJURY_TYPE<-recode(data$OFFICER_INJURY_TYPE,"c('Bite','Bite, Bruise, Laceration/Cut','Bite, Laceration/Cut, Redness/Swelling','Bite, redness/pain','Bite, Transported by DFD, Laceration/Cut, Redness/Swelling, Internal Injury')='Bite'")
+                                 
+data$OFFICER_INJURY_TYPE<-recode(data$OFFICER_INJURY_TYPE,"c('Bruise','Bruise, Laceration/Cut','Bruise, Laceration/Cut, Redness/Swelling','Bruise, Redness/Swelling','Bruise, Sprain/Strain, Abrasion/Scrape')='Bruise'")
+                                
+data$OFFICER_INJURY_TYPE<-recode(data$OFFICER_INJURY_TYPE,"c('Dizziness, Elevated Heart Rate, Fatigue, Laceration/Cut, Redness/Swelling, Sprain/Strain','Dizziness, Redness/Swelling, Bruise, CONCUSSION')='Dizziness'")
+                                 
+data$OFFICER_INJURY_TYPE<-recode(data$OFFICER_INJURY_TYPE,"c('Laceration/Cut','Laceration/Cut, Abrasion/Scrape','Laceration/Cut, Bruise',
+'Laceration/Cut, Bruise, Redness/Swelling, Elevated Heart Rate, Fatigue, poison ivy','Laceration/Cut, CONCUSION','Laceration/Cut, Laceration/Cut, Dizziness, Fluid Exposure','Laceration/Cut, Pain','Laceration/Cut, Redness/Swelling','Laceration/Cut, Redness/Swelling, Abrasion/Scrape','Laceration/Cut, Vision Impaired')='Laceration'")
+                                 
+data$OFFICER_INJURY_TYPE<-recode(data$OFFICER_INJURY_TYPE,"c('PAIN','PAIN IN JAW AREA','PAIN TO GROIN AREA','PAIN, Fatigue','pain')='Pain'")
+
+data$OFFICER_INJURY_TYPE<-recode(data$OFFICER_INJURY_TYPE,"c('Redness/Swelling','Redness/Swelling, Abrasion/Scrape','Redness/Swelling, Bruise','Redness/Swelling, Elevated Heart Rate, Bruise','Redness/Swelling, Laceration/Cut, Abrasion/Scrape, Bruise','Redness/Swelling, Sprain/Strain','Redness/Swelling, Sprain/Strain, Hospitalized','Redness/Swelling, TEMPORARY TINGLING PAIN','SEVERE PAIN, Redness/Swelling')='Redness/Swelling'")
+                                 
+data$OFFICER_INJURY_TYPE<-recode(data$OFFICER_INJURY_TYPE,"c('No injuries noted or visible','No injuries noted or visible, No injuries noted or visible')='No injuries'")
+
+data$OFFICER_INJURY_TYPE<-recode(data$OFFICER_INJURY_TYPE,"c('Elevated Heart Rate, Fluid Exposure','Exposed to Body Fluid','Fatigue',
+'Fatigue, Abrasion/Scrape, Sprain/Strain','Fluid Exposure','Fracture','Internal Injury','KNEE', 'Jammed right thumb, Abrasion/Scrape','KICKED IN CHEST','Maced blow back','OC Exposure','OFF_INJURE_DESC','possible blood exposure','Puncture','SOARNESS','Soreness/loss of strength','SWALLON NOSE')='Others'")
+                                
+data$OFFICER_INJURY_TYPE<-recode(data$OFFICER_INJURY_TYPE,"c('Sprain/Strain, Tore Minscus','Sprain/Strain','Sprain/Strain, Laceration/Cut')='Sprain/Strain'")
+table(data$OFFICER_INJURY_TYPE)
+
+##Checking and modifying Subject Injury Type column
+
+data$SUBJECT_INJURY_TYPE<-recode(data$SUBJECT_INJURY_TYPE,"c('Abrasion/Scrape','Abrasion/Scrape, Bite','Abrasion/Scrape, Bloody Nose','Abrasion/Scrape, Bloody Nose, Abrasion/Scrape','Abrasion/Scrape, Bruise','Abrasion/Scrape, Bruise, Hospitalized, Taser Burn Marks','Abrasion/Scrape, Elevated Blood Pressure, Elevated Heart Rate, Laceration/Cut, Taser Burn Marks, Treated by DFD','Abrasion/Scrape, Elevated Heart Rate','Abrasion/Scrape, Hospital Drug Evaluation','Abrasion/Scrape, Hospitalized','Abrasion/Scrape,
+Hospitalized, Taser Burn Marks, Treated by DFD','Abrasion/Scrape, Injured prior to contact','Abrasion/Scrape, Injured prior to contact, Hospitalized','Abrasion/Scrape, Injured prior to contact, Injury Not Related to Force','Abrasion/Scrape, Injury Not Related to Force','Abrasion/Scrape, Laceration/Cut','Abrasion/Scrape, Laceration/Cut, MISSING TOOTH','Abrasion/Scrape, Laceration/Cut, Redness/Swelling','Abrasion/Scrape, Laceration/Cut, Taser Burn Marks','Abrasion/Scrape, minor scrape','Abrasion/Scrape, Non-Visible Injury/Pain','Abrasion/Scrape, OC Spray Treatment','Abrasion/Scrape, OC Spray Treatment, Redness/Swelling','Abrasion/Scrape, Puncture','Abrasion/Scrape, Redness/Swelling','Abrasion/Scrape, Redness/Swelling, Taser Burn Marks','Abrasion/Scrape, Taser Burn Marks','Abrasion/Scrape, Taser Burn Marks, Fracture, Non-Visible Injury/Pain','Abrasion/Scrape, Taser Burn Marks, Hospitalized',
+'Abrasion/Scrape, Taser Burn Marks, Taser drive stun','Abrasion/Scrape, Taser Burn Marks, Treated by DFD','Abrasion/Scrape, Taser Burn Marks, Treated by DFD, Non-Visible Injury/Pain','Abrasion/Scrape, taser dart',
+'Abrasion/Scrape, TASER PROBE CONTACT','Abrasion/Scrape, TASER PRONGED, Redness/Swelling','Abrasion/Scrape, Treated by DFD','Abrasion/Scrape, Treated by DFD, Hospitalized','Abrasion/Scrape, Unconscious state','Abrasion/Scrape, Redness/Swelling, Bruise, OC Spray Treatment, Treated by DFD')='Abrasion/Scrape'")
+
+data$SUBJECT_INJURY_TYPE<-recode(data$SUBJECT_INJURY_TYPE,"c('Bloody Nose','Bloody Nose, Abrasion/Scrape','Bloody Nose, Abrasion/Scrape, Hospital Drug Evaluation','Bloody Nose, Abrasion/Scrape, Laceration/Cut','Bloody Nose, Bruise, Laceration/Cut','Bloody Nose, Bruise, Treated by DFD, Hospitalized, Fracture','Bloody Nose, Fracture','Bloody Nose, Laceration/Cut','Bloody Nose, Laceration/Cut, Hospitalized, Redness/Swelling','Bloody Nose, Redness/Swelling','Bloody Nose, Hospitalized, Non-Visible Injury/Pain, Abrasion/Scrape, Redness/Swelling','Bloody Nose, Taser Burn Marks, Treated by DFD, Hospital Drug Evaluation, Hospitalized')='Bloody Nose'")
+ 
+data$SUBJECT_INJURY_TYPE<-recode(data$SUBJECT_INJURY_TYPE,"c('Bruise','Bruise, Abrasion/Scrape','Bruise, Injured prior to contact','Bruise, Puncture','Bruise, Redness/Swelling','Bruise, Redness/Swelling, Laceration/Cut, Hospitalized',
+'Bruise, Taser Burn Marks','Bruise, Taser Burn Marks, Treated by DFD','Bruise, Treated by DFD')='Bruise'")
+
+data$SUBJECT_INJURY_TYPE<-recode(data$SUBJECT_INJURY_TYPE,"c('Hospital Drug Evaluation','Hospital Drug Evaluation, Hospitalized','Hospital Drug Evaluation, Hospitalized, Non-Visible Injury/Pain, Pepperball Treatment',
+'Hospital Drug Evaluation, Laceration/Cut','Hospital Drug Evaluation, MULTIPLE TASER DEPLOYMENTS, PEPERBAL DEPLOYMENT','Hospital Drug Evaluation, Non-Visible Injury/Pain')='Hospital Drug Evaluation'")
+
+data$SUBJECT_INJURY_TYPE<-recode(data$SUBJECT_INJURY_TYPE,"c('Injured prior to contact','Injured prior to contact, Abrasion/Scrape','Injured prior to contact, Abrasion/Scrape, Puncture','Injured prior to contact, Abrasion/Scrape, Puncture, Treated by DFD','Injured prior to contact, Bruise','Injured prior to contact, Hospitalized','Injured prior to contact, Injury Not Related to Force',
+'Injured prior to contact, Injury Not Related to Force, Treated by DFD, OC Spray Treatment, Hospitalized','Injured prior to contact, Laceration/Cut','Injured prior to contact, Non-Visible Injury/Pain','Injured prior to contact, OC Spray Treatment','Injured prior to contact, Laceration/Cut, Puncture','Injured prior to contact, Puncture','Injured prior to contact, Treated by DFD')='Injured prior to contact'")
+
+data$SUBJECT_INJURY_TYPE<-recode(data$SUBJECT_INJURY_TYPE,"c('Injury Not Related to Force','Injury Not Related to Force, Bruise','Injury Not Related to Force, Hospital Drug Evaluation','Injury Not Related to Force, Hospitalized','Injury Not Related to Force, Injured prior to contact','Injury Not Related to Force, Treated by DFD')='Injury Not Related to Force'")
+
+data$SUBJECT_INJURY_TYPE<-recode(data$SUBJECT_INJURY_TYPE,"c('Laceration/Cut','Laceration/Cut, Abrasion/Scrape','Laceration/Cut, Abrasion/Scrape, MISSING TOOTH','Laceration/Cut, Bruise','Laceration/Cut, Injury Not Related to Force','Laceration/Cut, Injury Not Related to Force, Injured prior to contact, Treated by DFD, cut, injury not related to force, injured prior to contact, treated by DFD/ Baylor, Cut, Injury not related to force, Injured prior to contact, Treated by DFD/ Baylor','Laceration/Cut, Injury Not Related to Force, Treated by DFD','Laceration/Cut, OC Spray Treatment','Laceration/Cut, OC Spray Treatment, Puncture, Treated by DFD','Laceration/Cut, Puncture','Laceration/Cut, Puncture, Hospitalized','Laceration/Cut, Redness/Swelling','Laceration/Cut, Redness/Swelling, Injured prior to contact','Laceration/Cut, Bruise, Bruise','Laceration/Cut, Taser Burn Marks','Laceration/Cut, Treated by DFD')='Laceration/Cut'")
+
+data$SUBJECT_INJURY_TYPE<-recode(data$SUBJECT_INJURY_TYPE,"c('NO INJURIES','No injuries noted or visible','no injuries visible','NO VISIBLE INJURIES','None','none, Injured prior to contact','Non-Visible Injury/Pain, Abrasion/Scrape','Non-Visible Injury/Pain, APOWW','Non-Visible Injury/Pain, Injured prior to contact','Non-Visible Injury/Pain','Non-Visible Injury/Pain, Injury Not Related to Force','Non-Visible Injury/Pain, Treated by DFD')='No injuries'")
+
+data$SUBJECT_INJURY_TYPE<-recode(data$SUBJECT_INJURY_TYPE,"c('OC Spray Treatment','OC Spray Treatment, Abrasion/Scrape','OC Spray Treatment, Injured prior to contact','OC Spray Treatment, Redness/Swelling, Abrasion/Scrape','OC Spray Treatment, Taser Burn Marks, Abrasion/Scrape','OC Spray Treatment, Treated by DFD','OC Spray Treatment, Treated by DFD, Abrasion/Scrape','OC Spray Treatment, Redness/Swelling')='OC Spray Treatment'")
+
+data$SUBJECT_INJURY_TYPE<-recode(data$SUBJECT_INJURY_TYPE,"c('Puncture','puncture wound taser prong','Puncture, Abrasion/Scrape','Puncture, Abrasion/Scrape, Injury Not Related to Force','Puncture, Bite','Puncture, Non-Visible Injury/Pain',
+'Puncture, Bite, Injured prior to contact, Laceration/Cut, Treated by DFD','Puncture, Hospital Drug Evaluation','Puncture, Hospitalized','Puncture, Laceration/Cut','Puncture, Treated by DFD','Puncture, OC Spray Treatment','Puncture, Taser Burn Marks','Puncture, Laceration/Cut, Injured prior to contact')='Puncture'")
+
+data$SUBJECT_INJURY_TYPE<-recode(data$SUBJECT_INJURY_TYPE,"c('Redness/Swelling','Redness/Swelling, Abrasion/Scrape','Redness/Swelling, Injured prior to contact','Redness/Swelling, Laceration/Cut','Redness/Swelling, Laceration/Cut, Abrasion/Scrape','Redness/Swelling, Non-Visible Injury/Pain','Redness/Swelling, OC Spray Treatment, Treated by DFD','Redness/Swelling, Treated by DFD','Redness/Swelling, Taser Burn Marks, Laceration/Cut, Hospitalized, Treated by DFD')='Redness/Swelling'")
+
+data$SUBJECT_INJURY_TYPE<-recode(data$SUBJECT_INJURY_TYPE,"c('Taser Burn Marks','Taser Burn Marks, Abrasion/Scrape','Taser Burn Marks, Abrasion/Scrape, Hospitalized, Hospital Drug Evaluation','Taser Burn Marks, Abrasion/Scrape, Treated by DFD','Taser Burn Marks, Bruise, Abrasion/Scrape','Taser Burn Marks, Bruise, Treated by DFD','Taser Burn Marks, Injury Not Related to Force, Hospitalized','Taser Burn Marks, Injury Not Related to Force, Treated by DFD','Taser Burn Marks, Laceration/Cut','Taser Burn Marks, OC Spray Treatment','Taser Burn Marks, Puncture','Taser Burn Marks, Redness/Swelling, Treated by DFD','Taser Burn Marks, Treated by DFD','Taser Burn Marks, Treated by DFD, Abrasion/Scrape, NO','Taser Burn Marks, Injury Not Related to Force, Bloody Nose, Injured prior to contact')='Taser Burn Marks'")
+
+data$SUBJECT_INJURY_TYPE<-recode(data$SUBJECT_INJURY_TYPE,"c('Treated by DFD','Treated by DFD, Abrasion/Scrape','Treated by DFD, Elevated Blood Pressure, Elevated Heart Rate, Hospitalized','Treated by DFD, Hospital Drug Evaluation','Treated by DFD, Non-Visible Injury/Pain','Treated by DFD, soreness of eyes from spray, eyes burning')='Treated by DFD'")
+
+data$SUBJECT_INJURY_TYPE<-recode(data$SUBJECT_INJURY_TYPE,"c('BACK','Bite, Abrasion/Scrape','bleeding from mouth','bloody lip, Redness/Swelling','BLOODY MOUTH','broken teeth, Taser Burn Marks','chipped front tooth','CUT LIP','Elevated Blood Pressure, Hospital Drug Evaluation','Elevated Heart Rate','Elevated Heart Rate, Injury Not Related to Force','TASER PUNCTURE','Fracture','Fracture, Bloody Nose, Laceration/Cut, Treated by DFD, Hospitalized','Hospitalized','Internal Injury, Redness/Swelling, Laceration/Cut','TAZER PRONG MARKS',
+'none, Injured prior to contact','pain','POSSIBLE PUNCTURE WOUND','right hand','Scratch','scratch, pain','SUBJ_INJURE_DESC','taser prong deployment','CHIPPED FRONT LEFT TOOTH','Elevated Heart Rate, Injury Not Related to Force, Treated by DFD, Hospitalized','iv pulled out of left arm, Injured prior to contact','None')='Others'")
+
+table(data$SUBJECT_INJURY_TYPE)
+
+#Checking and modifying Race values for Officer and Subject accordingly
+data$OFFICER_RACE= recode(data$OFFICER_RACE,"c('American Ind','Asian','OffRace','Other')='Other'")
+table(data$OFFICER_RACE)
+data$SUBJECT_RACE= recode(data$SUBJECT_RACE,"c('American Ind','Asian','CitRace','Other','NULL')='Other'")
+table(data$SUBJECT_RACE)
+
+#Checking and modifying Subject Description column
+data$SUBJECT_DESCRIPTION<-recode(data$SUBJECT_DESCRIPTION,"c('NULL','Unknown')='Unknown'")
+data$SUBJECT_DESCRIPTION<-recode(data$SUBJECT_DESCRIPTION,"c('Alchohol','Alchohol and unknown drugs','Unknown Drugs')='Alchohol/Drugs'")
+data$SUBJECT_DESCRIPTION<-recode(data$SUBJECT_DESCRIPTION,"c('FD-Animal','FD-Motor Vehicle','FD-Suspect Unarmed','FD-Suspect w/ Gun','FD-Suspect w/ Other Weapon','FD-Unknown if Armed','Animal','CIT_INFL_A')='Others'")
+table(data$SUBJECT_DESCRIPTION)
+
+#Checking and modifying Subject Offense column
+data$SUBJECT_OFFENSE=recode(data$SUBJECT_OFFENSE,"c('APOWW','APOWW, Assault/FV','APOWW, Assault/Public Servant','APOWW, Criminal Mischief','APOWW, Drug Possession - Misdemeanor','APOWW, Public Intoxication, Warrant/Hold','APOWW, Warrant/Hold')='APOWW'")
+
+data$SUBJECT_OFFENSE=recode(data$SUBJECT_OFFENSE,"c('Assault','Assault, Assault/Public Servant','Assault, Assault/Public Servant, Evading Arrest','Assault, Burglary/Habitation','Assault, Burglary/Habitation','Assault, Criminal Mischief','Assault, Criminal Mischief, Assault/Public Servant','Assault, Disorderly Conduct','Assault, Robbery','Assault, Criminal Mischief, Warrant/Hold, Assault/Public Servant, Other Misdemeanor Arrest','Assault, DWI, Resisting Arrest','Assault, Fail to ID, Resisting Arrest','Assault, Drug Possession - Misdemeanor','Assault, Evading Arrest','Assault, Evading Arrest, Drug Possession - Felony','Assault, Fail to ID','Assault, Fail to ID, Other Felony Arrest','Assault, Resisting Arrest, Warrant/Hold, Drug Possession - Felony','Assault, Fail to ID, Resisting Search and Transport','Assault, Warrant/Hold','Assault, Traffic Violation','Assault, Resisting Arrest','Assault, Other Felony Arrest, Evading Arrest','Assault, Other Misdemeanor Arrest, Other Felony Arrest','Assault, Public Intoxication','Assault, Resisting Arrest, Other Felony Arrest, Fail to ID','Assault, Resisting Search and Transport, Other Felony Arrest, DWLI','Assault, Fail to ID, Theft, Public Intoxication, Resisting Search and Transport, Other Misdemeanor Arrest, Other Felony Arrest')='Assault'")
+
+data$SUBJECT_OFFENSE=recode(data$SUBJECT_OFFENSE,"c('Assault/FV','Assault/FV, APOWW','Assault/FV, Assault','Assault/FV, Assault, Resisting Arrest, Resisting Search and Transport, Warrant/Hold','Assault/FV, Assault, Resisting Search and Transport, Other Misdemeanor Arrest','Assault/FV, Assault/Public Servant','Assault/FV, Criminal Mischief','Assault/FV, Drug Possession - Felony','Assault/FV, Drug Possession - Misdemeanor','Assault/FV, Drug Possession - Misdemeanor, Resisting Arrest, Warrant/Hold','Assault/FV, Drug Possession - Misdemeanor, Warrant/Hold, Other Felony Arrest','Assault/FV, Evading Arrest','Assault/FV, Evading Arrest, Assault/Public Servant',
+'Assault/FV, Evading Arrest, Drug Possession - Misdemeanor','Assault/FV, Evading Arrest, Drug Possession - Misdemeanor, Warrant/Hold','Assault/FV, Evading Arrest, Other Felony Arrest','Assault/FV, Evading Arrest, Other Felony Arrest, Drug Possession - Misdemeanor','Assault/FV, Evading Arrest, Other Misdemeanor Arrest, Drug Possession - Misdemeanor, Warrant/Hold',
+'Assault/FV, Evading Arrest, Resisting Arrest','Assault/FV, Evading Arrest, Resisting Arrest, Criminal Mischief','Assault/FV, Evading Arrest, Resisting Arrest, Warrant/Hold','Assault/FV, Evading Arrest, Warrant/Hold','Assault/FV, Fail to ID, Resisting Arrest, Other Misdemeanor Arrest, Warrant/Hold, Other Felony Arrest','Assault/FV, Warrant/Hold','Assault/FV, Fail to ID, Resisting Arrest, Warrant/Hold, Other Misdemeanor Arrest','Assault/FV, Other Felony Arrest','Assault/FV, Resisting Arrest',
+'Assault/FV, Other Felony Arrest, Other Misdemeanor Arrest, Assault/Public Servant','Assault/FV, Other Felony Arrest, Robbery','Assault/FV, Other Felony Arrest, Warrant/Hold','Assault/FV, Other Misdemeanor Arrest','Assault/FV, Other Misdemeanor Arrest, Warrant/Hold','Assault/FV, Resisting Arrest, Drug Possession - Misdemeanor, Warrant/Hold','Assault/FV, Resisting Arrest, Other Felony Arrest','Assault/FV, Resisting Arrest, Other Misdemeanor Arrest','Assault/FV, Resisting Arrest, Resisting Search and Transport, Other Felony Arrest','Assault/FV, Resisting Arrest, Warrant/Hold','Assault/FV, Resisting Arrest, Warrant/Hold, Other Felony Arrest','Assault/FV, Resisting Search and Transport','Assault/FV, Resisting Search and Transport, Other Felony Arrest','Assault/FV, Resisting Search and Transport, Other Felony Arrest, Warrant/Hold','Assault/FV, Warrant/Hold, Assault/Public Servant','Assault/FV, Warrant/Hold, Drug Possession - Misdemeanor, Other Felony Arrest','Assault/FV, Warrant/Hold, Other Felony Arrest')='Assault/FV'")
+
+data$SUBJECT_OFFENSE=recode(data$SUBJECT_OFFENSE,"c('Assault/Public Servant','Assault/Public Servant, APOWW','Assault/Public Servant, APOWW, Other Felony Arrest','Assault/Public Servant, Assault','Assault/Public Servant, Assault/FV','Assault/Public Servant, Assault/FV, Resisting Arrest','Assault/Public Servant, Crim Trespass/Bldg/Prop, Evading Arrest','Assault/Public Servant, Crim Trespass/Bldg/Prop, Resisting Arrest','Assault/Public Servant, Criminal Mischief, Fail to ID, Resisting Arrest, Public Intoxication','Assault/Public Servant, Drug Possession - Felony, Other Felony Arrest','Assault/Public Servant, Drug Possession - Felony, Warrant/Hold','Assault/Public Servant, Drug Possession - Misdemeanor','Assault/Public Servant, Evading Arrest','Assault/Public Servant, Evading Arrest, Crim Trespass/Bldg/Prop','Assault/Public Servant, Evading Arrest, No Arrest','Assault/Public Servant, Warrant/Hold','Assault/Public Servant, Evading Arrest, Resisting Arrest, Public Intoxication','Assault/Public Servant, Evading Arrest, Resisting Search and Transport','Assault/Public Servant, Fail to ID','Assault/Public Servant, Other Felony Arrest','Assault/Public Servant, Other Felony Arrest, Drug Possession - Misdemeanor, Warrant/Hold','Assault/Public Servant, Warrant/Hold, Fail to ID','Assault/Public Servant, Other Misdemeanor Arrest','Assault/Public Servant, Public Intoxication','Assault/Public Servant, Public Intoxication, Evading Arrest, Resisting Arrest','Assault/Public Servant, Public Intoxication, Theft','Assault/Public Servant, Resisting Arrest','Assault/Public Servant, Resisting Arrest, Evading Arrest, Warrant/Hold','Assault/Public Servant, Resisting Arrest, Fail to ID','Assault/Public Servant, Resisting Search and Transport','Assault/Public Servant, Robbery, Resisting Arrest','Assault/Public Servant, Robbery, Resisting Search and Transport','Assault/Public Servant, Take Weapon from PO','Assault/Public Servant, Warrant/Hold, Drug Possession - Felony')='Assault/Public Servant'")
+
+data$SUBJECT_OFFENSE=recode(data$SUBJECT_OFFENSE,"c('Burglary','Burglary of a Vehicle','Burglary of a Vehicle, Criminal Mischief','Burglary of a Vehicle, Criminal Mischief, Evading Arrest, Resisting Arrest, Warrant/Hold','Burglary of a Vehicle, Criminal Mischief, Evading Arrest, Warrant/Hold','Burglary of a Vehicle, Criminal Mischief, Fail to ID, Resisting Arrest','Burglary of a Vehicle, Criminal Mischief, Resisting Arrest, Fail to ID','Burglary of a Vehicle, Drug Possession - Felony','Burglary of a Vehicle, Drug Possession - Felony, Drug Possession - Misdemeanor','Burglary of a Vehicle, Escape','Burglary of a Vehicle, Evading Arrest',
+'Burglary of a Vehicle, Evading Arrest, Warrant/Hold','Burglary of a Vehicle, Evading Arrest, Warrant/Hold, Resisting Arrest','Burglary of a Vehicle, Fail to ID, Warrant/Hold, Resisting Arrest','Burglary of a Vehicle, Other Felony Arrest','Burglary of a Vehicle, Resisting Arrest','Burglary of a Vehicle, Resisting Arrest, Drug Possession - Misdemeanor','Burglary of a Vehicle, Resisting Arrest, Fail to ID, Warrant/Hold','Burglary/Habitation, Warrant/Hold, Other Felony Arrest','Burglary of a Vehicle, Resisting Arrest, Warrant/Hold','Burglary of a Vehicle, Theft','Burglary of a Vehicle, Unauthorize Use Vehicle','Burglary of a Vehicle, Warrant/Hold','Burglary, Evading Arrest','Burglary/Habitation, Other Felony Arrest, Warrant/Hold','Burglary/Building','Burglary/Building, Crim Trespass/Bldg/Prop, Evading Arrest','Burglary/Building, Drug Possession - Felony','Burglary/Building, Warrant/Hold','Burglary/Habitation','Burglary/Habitation, Assault','Burglary/Habitation, Assault/FV','Burglary/Habitation, Assault/Public Servant, Other Felony Arrest','Burglary/Habitation, Criminal Mischief, Robbery','Burglary/Habitation, Evading Arrest','Burglary/Habitation, Evading Arrest, Fail to ID, Warrant/Hold',
+'Burglary/Habitation, Resisting Arrest','Burglary/Habitation, Resisting Arrest, Resisting Search and Transport','Burglary/Habitation, Unauthorize Use Vehicle, Evading Arrest','Burglary/Habitation, Warrant/Hold, Drug Possession - Felony, Drug Possession - Misdemeanor')='Burglary'")
+
+data$SUBJECT_OFFENSE=recode(data$SUBJECT_OFFENSE,"c('Crim Trespass/Bldg/Prop','Crim Trespass/Bldg/Prop, APOWW','Crim Trespass/Bldg/Prop, Assault/Public Servant','Crim Trespass/Bldg/Prop, Fail to ID, Resisting Arrest','Crim Trespass/Bldg/Prop, No Arrest','Crim Trespass/Bldg/Prop, Resisting Arrest','Crim Trespass/Bldg/Prop, Resisting Arrest, Assault/Public Servant','Crim Trespass/Bldg/Prop, Resisting Arrest, Fail to ID','Crim Trespass/Bldg/Prop, Resisting Arrest, Resisting Search and Transport','Crim Trespass/Bldg/Prop, Resisting Search and Transport','Crim Trespass/Bldg/Prop, Warrant/Hold','Crim Trespass/Hab/Weapon','Crim Trespass/Hab/Weapon, Resisting Arrest','Criminal Mischief','Criminal Mischief, Assault/FV','Criminal Mischief, Drug Possession - Misdemeanor, Assault/Public Servant, Assault/FV','Criminal Mischief, Evading Arrest, Warrant/Hold','Criminal Mischief, Other Misdemeanor Arrest','Criminal Mischief, Public Intoxication, Resisting Search and Transport','Criminal Mischief, Resisting Arrest','Criminal Mischief, Resisting Arrest, Warrant/Hold','Criminal Mischief, Resisting Search and Transport, Warrant/Hold','Criminal Mischief, Traffic Violation','Crim Trespass/Bldg/Prop, Resisting Arrest, Warrant/Hold','Crim Trespass/Hab/Weapon, Criminal Mischief, Resisting Arrest')='Criminal Trespass/Mischief'")
+
+data$SUBJECT_OFFENSE=recode(data$SUBJECT_OFFENSE,"c('Disorderly Conduct','Disorderly Conduct, Assault/Public Servant','Disorderly Conduct, Evading Arrest','Disorderly Conduct, Other Felony Arrest','Disorderly Conduct, Warrant/Hold, Assault','Disorderly Conduct, Other Misdemeanor Arrest','Disorderly Conduct, Public Intoxication, Warrant/Hold','Disorderly Conduct, Resisting Arrest','Disorderly Conduct, Resisting Search and Transport','Disorderly Conduct, Resisting Arrest, Warrant/Hold','Disorderly Conduct, Resisting Search and Transport, Drug Possession - Misdemeanor')='Disorderly Conduct'")
+
+data$SUBJECT_OFFENSE=recode(data$SUBJECT_OFFENSE,"c('Drug Possession - Felony','Drug Possession - Felony, Assault/FV, Drug Possession - Misdemeanor, Evading Arrest','Drug Possession - Felony, Drug Possession - Misdemeanor, Evading Arrest','Drug Possession - Felony, Drug Possession - Misdemeanor, Evading Arrest, Assault/FV, Other Misdemeanor Arrest','Drug Possession - Felony, Drug Possession - Misdemeanor, Evading Arrest, Other Felony Arrest','Drug Possession - Felony, Drug Possession - Misdemeanor, Public Intoxication','Drug Possession - Felony, Drug Possession - Misdemeanor, Warrant/Hold','Drug Possession - Felony, Evading Arrest, Resisting Search and Transport','Drug Possession - Felony, Man/Del/Dangerous Drug','Drug Possession - Felony, Other Felony Arrest, Resisting Arrest','Drug Possession - Felony, Other Misdemeanor Arrest, Warrant/Hold','Drug Possession - Felony, Public Intoxication','Drug Possession - Felony, Public Intoxication, Resisting Arrest, Other Misdemeanor Arrest','Drug Possession - Felony, Resisting Search and Transport','Drug Possession - Felony, Warrant/Hold','Drug Possession - Felony, Warrant/Hold, Assault/Public Servant','Drug Possession - Misdemeanor','Drug Possession - Misdemeanor, Warrant/Hold, Other Felony Arrest','Drug Possession - Misdemeanor, Drug Possession - Felony, Other Misdemeanor Arrest','Drug Possession - Misdemeanor, Drug Possession - Felony, Resisting Search and Transport, Warrant/Hold','Drug Possession - Misdemeanor, Evading Arrest','Drug Possession - Misdemeanor, Evading Arrest, Other Misdemeanor Arrest','Drug Possession - Misdemeanor, Evading Arrest, Unauthorize Use Vehicle','Drug Possession - Misdemeanor, Evading Arrest, Warrant/Hold','Drug Possession - Misdemeanor, Other Felony Arrest','Drug Possession - Misdemeanor, Other Felony Arrest, Other Misdemeanor Arrest','Drug Possession - Misdemeanor, Other Misdemeanor Arrest','Drug Possession - Misdemeanor, Public Intoxication, Warrant/Hold','Drug Possession - Misdemeanor, Resisting Arrest','Drug Possession - Misdemeanor, Resisting Arrest, Fail to ID','Drug Possession - Misdemeanor, Resisting Arrest, Warrant/Hold','Drug Possession - Misdemeanor, Resisting Search and Transport','Drug Possession - Misdemeanor, Resisting Search and Transport, Other Felony Arrest','Drug Possession - Misdemeanor, Warrant/Hold, Evading Arrest','Drug Possession - Misdemeanor, Warrant/Hold, Fail to ID, Resisting Search and Transport')='Drug Possession'")
+
+data$SUBJECT_OFFENSE=recode(data$SUBJECT_OFFENSE,"c('DWI','DWI, Assault/Public Servant','DWI, Assault/Public Servant, Drug Possession - Felony, Other Felony Arrest','DWI, Criminal Mischief','DWI, Drug Possession - Misdemeanor, Resisting Arrest, Escape','DWI, DWLI, Warrant/Hold, Other Misdemeanor Arrest','DWI, DWLS, Resisting Search and Transport','DWI, Evading Arrest','DWI, Other Misdemeanor Arrest, Drug Possession - Misdemeanor','DWI, Resisting Search and Transport, Drug Possession - Misdemeanor, Escape','DWI, Resisting Arrest','DWI, Resisting Arrest, DWLI','DWI, Resisting Arrest, Escape, Drug Possession - Misdemeanor','DWI, Warrant/Hold','DWI, Resisting Arrest, Traffic Violation','DWI, Resisting Arrest, Warrant/Hold, Assault','DWI, Resisting Search and Transport','DWI, Resisting Search and Transport, Other Felony Arrest','DWI, Resisting Search and Transport, Resisting Arrest, Other Felony Arrest','DWLI, Resisting Search and Transport, Drug Possession - Felony','DWLI, Warrant/Hold, Assault, Criminal Mischief, Resisting Search and Transport, Other Felony Arrest')='DWI'")
+
+data$SUBJECT_OFFENSE=recode(data$SUBJECT_OFFENSE,"c('Evading Arrest','Evading Arrest, Assault','Evading Arrest, Assault/Public Servant','Evading Arrest, Burglary of a Vehicle, Other Misdemeanor Arrest, Warrant/Hold','Evading Arrest, Crim Trespass/Bldg/Prop, Resisting Arrest','Evading Arrest, Criminal Mischief','Evading Arrest, Disorderly Conduct','Evading Arrest, Drug Possession - Felony',
+'Evading Arrest, Drug Possession - Felony, Drug Possession - Misdemeanor','Evading Arrest, Drug Possession - Felony, Drug Possession - Misdemeanor, Manifest/Drug Sales','Evading Arrest, Drug Possession - Felony, Drug Possession - Misdemeanor, Warrant/Hold','Evading Arrest, Drug Possession - Felony, Drug Possession - Misdemeanor, Warrant/Hold, Other Felony Arrest','Evading Arrest, Drug Possession - Misdemeanor','Evading Arrest, Drug Possession - Misdemeanor, Drug Possession - Felony, Other Felony Arrest','Evading Arrest, Drug Possession - Misdemeanor, Drug Possession - Felony, Warrant/Hold, Other Felony Arrest','Evading Arrest, Drug Possession - Misdemeanor, Other Felony Arrest, Fail to ID, Warrant/Hold','Evading Arrest, Drug Possession - Misdemeanor, Other Felony Arrest, Warrant/Hold','Evading Arrest, Drug Possession - Misdemeanor, Other Misdemeanor Arrest','Evading Arrest, Drug Possession - Misdemeanor, Unauthorize Use Vehicle','Evading Arrest, Drug Possession - Misdemeanor, Warrant/Hold, Other Felony Arrest','Evading Arrest, Escape, Resisting Search and Transport','Evading Arrest, Escape, Warrant/Hold','Evading Arrest, Fail to ID','Evading Arrest, Fail to ID, Warrant/Hold','Evading Arrest, Man/Del/Dangerous Drug, Drug Possession - Misdemeanor','Evading Arrest, Other Felony Arrest','Evading Arrest, Other Felony Arrest, Assault','Evading Arrest, Other Felony Arrest, Drug Possession - Felony','Evading Arrest, Other Felony Arrest, Drug Possession - Misdemeanor','Evading Arrest, Other Misdemeanor Arrest','Evading Arrest, Public Intoxication','Evading Arrest, Resisting Arrest','Evading Arrest, Resisting Arrest, Drug Possession - Felony','Evading Arrest, Resisting Arrest, Drug Possession - Felony, Warrant/Hold','Evading Arrest, Resisting Arrest, Fail to ID, Warrant/Hold','Evading Arrest, Resisting Arrest, Man/Del/Dangerous Drug','Evading Arrest, Resisting Arrest, Other Felony Arrest','Evading Arrest, Resisting Arrest, Other Misdemeanor Arrest, Warrant/Hold',
+'Evading Arrest, Resisting Arrest, Take Weapon from PO','Evading Arrest, Resisting Arrest, Unauthorize Use Vehicle','Evading Arrest, Resisting Arrest, Warrant/Hold','Evading Arrest, Resisting Arrest, Warrant/Hold, Other Misdemeanor Arrest','Evading Arrest, Resisting Search and Transport, Drug Possession - Felony, Theft','Evading Arrest, Resisting Search and Transport, Warrant/Hold','Evading Arrest, Robbery','Evading Arrest, Theft','Evading Arrest, Theft, Fail to ID','Evading Arrest, Unauthorize Use Vehicle','Evading Arrest, Unauthorize Use Vehicle, Robbery','Evading Arrest, Warrant/Hold','Evading Arrest, Warrant/Hold, Drug Possession - Felony',
+'Evading Arrest, Warrant/Hold, Drug Possession - Misdemeanor','Evading Arrest, Warrant/Hold, Fail to ID','Evading Arrest, Warrant/Hold, Murder','Evading Arrest, Warrant/Hold, Other Felony Arrest, DWI','Evading Arrest, Warrant/Hold, Other Misdemeanor Arrest')='Evading Arrest'")
+
+data$SUBJECT_OFFENSE=recode(data$SUBJECT_OFFENSE,"c('Fail to ID','Fail to ID, Assault/Public Servant','Fail to ID, Other Misdemeanor Arrest','Fail to ID, Resisting Arrest','Fail to ID, Resisting Arrest, Drug Possession - Felony','Fail to ID, Resisting Arrest, Warrant/Hold','Fail to ID, Resisting Search and Transport','Fail to ID, Resisting Search and Transport, Warrant/Hold',
+'Fail to ID, Warrant/Hold','Fail to ID, Warrant/Hold, Other Misdemeanor Arrest','Fail to ID, Warrant/Hold, Resisting Arrest')='Fail to ID'")
+
+data$SUBJECT_OFFENSE=recode(data$SUBJECT_OFFENSE,"c('Other Agency Arrest','Other Agency Arrest, Assault/FV','Other Felony Arrest','Other Felony Arrest, Assault, Drug Possession - Misdemeanor','Other Felony Arrest, Assault, Evading Arrest','Other Felony Arrest, Assault, Resisting Search and Transport','Other Felony Arrest, Assault, Resisting Search and Transport, Other Misdemeanor Arrest','Other Felony Arrest, Assault, Resisting Search and Transport, Warrant/Hold','Other Felony Arrest, Assault/FV','Other Felony Arrest, Burglary/Habitation, Assault/FV','Other Felony Arrest, Drug Possession - Misdemeanor','Other Felony Arrest, Drug Possession - Misdemeanor, Assault/Public Servant, Warrant/Hold','Other Felony Arrest, Drug Possession - Misdemeanor, Resisting Arrest','Other Felony Arrest, Evading Arrest, Drug Possession - Felony','Other Felony Arrest, Evading Arrest, Drug Possession - Misdemeanor','Other Felony Arrest, Evading Arrest, Drug Possession - Misdemeanor, Warrant/Hold','Other Felony Arrest, Evading Arrest, Warrant/Hold','Other Felony Arrest, Other Misdemeanor Arrest','Other Felony Arrest, Other Misdemeanor Arrest, Assault','Other Felony Arrest, Public Intoxication',
+'Other Felony Arrest, Resisting Arrest','Other Felony Arrest, Resisting Arrest, Drug Possession - Felony','Other Felony Arrest, Warrant/Hold, Resisting Arrest','Other Misdemeanor Arrest','Other Misdemeanor Arrest, Assault/Public Servant','Other Misdemeanor Arrest, Drug Possession - Felony','Other Misdemeanor Arrest, Drug Possession - Misdemeanor','Other Misdemeanor Arrest, DWLI','Other Misdemeanor Arrest, Evading Arrest','Other Misdemeanor Arrest, Evading Arrest, Resisting Arrest','Other Misdemeanor Arrest, Evading Arrest, Warrant/Hold','Other Misdemeanor Arrest, Evading Arrest, Warrant/Hold, Assault','Other Misdemeanor Arrest, Man/Del/Dangerous Drug','Other Misdemeanor Arrest, Other Felony Arrest','Other Misdemeanor Arrest, Resisting Arrest','Other Misdemeanor Arrest, Resisting Arrest, Other Felony Arrest','Other Misdemeanor Arrest, Resisting Search and Transport','Other Misdemeanor Arrest, Resisting Search and Transport, Drug Possession - Felony','Other Misdemeanor Arrest, Resisting Search and Transport, Evading Arrest, Other Felony Arrest, Warrant/Hold',
+'Other Misdemeanor Arrest, Traffic Violation','Other Misdemeanor Arrest, Warrant/Hold','Other Misdemeanor Arrest, Warrant/Hold, Other Felony Arrest, Drug Possession - Misdemeanor, Resisting Search and Transport','Other Misdemeanor Arrest, Warrant/Hold, Public Intoxication','Other Misdemeanor Arrest, Warrant/Hold, Resisting Arrest')='Other Arrests'")
+
+data$SUBJECT_OFFENSE=recode(data$SUBJECT_OFFENSE,"c('Public Intoxication','Public Intoxication, Assault','Public Intoxication, Assault/Public Servant','Public Intoxication, Crim Trespass/Bldg/Prop, Warrant/Hold, Resisting Search and Transport','Public Intoxication, Criminal Mischief','Public Intoxication, Criminal Mischief, Escape','Public Intoxication, Criminal Mischief, Fail to ID, Assault/Public Servant, Resisting Arrest','Public Intoxication, Warrant/Hold','Public Intoxication, Criminal Mischief, Resisting Arrest, Fail to ID, Assault/Public Servant','Public Intoxication, Criminal Mischief, Resisting Search and Transport','Public Intoxication, Disorderly Conduct','Public Intoxication, Disorderly Conduct, Other Misdemeanor Arrest, Resisting Arrest, Fail to ID','Public Intoxication, Drug Possession - Felony','Public Intoxication, Drug Possession - Felony, Drug Possession - Misdemeanor','Public Intoxication, Drug Possession - Felony, Fail to ID, Warrant/Hold','Public Intoxication, Drug Possession - Felony, Resisting Arrest','Public Intoxication, Drug Possession - Misdemeanor','Public Intoxication, Drug Possession - Misdemeanor, Other Felony Arrest','Public Intoxication, Drug Possession - Misdemeanor, Resisting Arrest','Public Intoxication, Drug Possession - Misdemeanor, Resisting Arrest, Resisting Search and Transport','Public Intoxication, Drug Possession - Misdemeanor, Resisting Search and Transport','Public Intoxication, Escape, Criminal Mischief','Public Intoxication, Evading Arrest','Public Intoxication, Evading Arrest, Resisting Arrest','Public Intoxication, Evading Arrest, Resisting Arrest, Drug Possession - Misdemeanor, Drug Possession - Felony','Public Intoxication, Evading Arrest, Resisting Search and Transport','Public Intoxication, Fail to ID','Public Intoxication, Fail to ID, Resisting Arrest','Public Intoxication, Other Felony Arrest, Resisting Search and Transport, Drug Possession - Misdemeanor','Public Intoxication, Other Misdemeanor Arrest','Public Intoxication, Resisting Arrest','Public Intoxication, Resisting Arrest, Assault/Public Servant','Public Intoxication, Resisting Arrest, Disorderly Conduct','Public Intoxication, Resisting Arrest, Drug Possession - Felony, Other Misdemeanor Arrest','Public Intoxication, Resisting Arrest, Drug Possession - Misdemeanor','Public Intoxication, Resisting Arrest, Evading Arrest','Public Intoxication, Resisting Arrest, Fail to ID, Warrant/Hold, Other Felony Arrest',
+'Public Intoxication, Resisting Arrest, Other Misdemeanor Arrest','Public Intoxication, Resisting Arrest, Warrant/Hold','Public Intoxication, Resisting Search and Transport','Public Intoxication, Resisting Search and Transport, Assault/Public Servant','Public Intoxication, Resisting Search and Transport, Criminal Mischief','Public Intoxication, Warrant/Hold, Resisting Arrest',
+'Public Intoxication, Resisting Search and Transport, Drug Possession - Felony','Public Intoxication, Resisting Search and Transport, Drug Possession - Misdemeanor, Warrant/Hold','Public Intoxication, Warrant/Hold, Resisting Search and Transport, Drug Possession - Misdemeanor, Other Felony Arrest')='Public Intoxication'")
+
+data$SUBJECT_OFFENSE=recode(data$SUBJECT_OFFENSE,"c('Resisting Arrest','Resisting Arrest, Assault','Resisting Arrest, Assault/FV','Resisting Arrest, Assault/Public Servant','Resisting Arrest, Assault/Public Servant, Fail to ID','Resisting Arrest, Criminal Mischief, Fail to ID, Theft','Resisting Arrest, Disorderly Conduct','Resisting Arrest, Drug Possession - Felony, Warrant/Hold','Resisting Arrest, Drug Possession - Misdemeanor','Resisting Arrest, Drug Possession - Misdemeanor, Warrant/Hold','Resisting Arrest, DWI','Resisting Arrest, Evading Arrest, Assault/FV','Resisting Arrest, Fail to ID','Resisting Arrest, Fail to ID, Warrant/Hold','Resisting Arrest, Manifest/Drug Sales, Drug Possession - Misdemeanor, Man/Del/Dangerous Drug','Resisting Arrest, Other Felony Arrest','Resisting Arrest, Other Felony Arrest, Deadly Conduct, Warrant/Hold','Resisting Arrest, Other Felony Arrest, Warrant/Hold','Resisting Arrest, Other Misdemeanor Arrest','Resisting Arrest, Other Misdemeanor Arrest, Other Felony Arrest','Resisting Arrest, Other Misdemeanor Arrest, Warrant/Hold','Resisting Arrest, Public Intoxication','Resisting Arrest, Public Intoxication, Other Felony Arrest','Resisting Arrest, Public Intoxication, Warrant/Hold','Resisting Arrest, Resisting Search and Transport','Resisting Arrest, Traffic Violation','Resisting Arrest, Unauthorize Use Vehicle, Drug Possession - Felony','Resisting Arrest, Warrant/Hold','Resisting Arrest, Warrant/Hold, Other Felony Arrest','Resisting Arrest, Warrant/Hold, Other Misdemeanor Arrest')='Resisting Arrest'")
+
+data$SUBJECT_OFFENSE=recode(data$SUBJECT_OFFENSE,"c('Resisting Search and Transport','Resisting Search and Transport, Assault','Resisting Search and Transport, Assault/FV','Resisting Search and Transport, City Ordinance Violation, Warrant/Hold','Resisting Search and Transport, Criminal Mischief, Warrant/Hold','Resisting Search and Transport, Drug Possession - Misdemeanor','Resisting Search and Transport, Drug Possession - Misdemeanor, Other Felony Arrest','Resisting Search and Transport, DWLI, Other Misdemeanor Arrest','Resisting Search and Transport, Man/Del/Dangerous Drug','Resisting Search and Transport, Other Felony Arrest','Resisting Search and Transport, Other Felony Arrest, Other Misdemeanor Arrest','Resisting Search and Transport, Other Misdemeanor Arrest','Resisting Search and Transport, Pedestrian In Roadway','Resisting Search and Transport, Public Intoxication','Resisting Search and Transport, Warrant/Hold')='Resisting Search and Transport'")
+
+data$SUBJECT_OFFENSE=recode(data$SUBJECT_OFFENSE,"c('Robbery','Robbery, Burglary/Habitation','Robbery, Evading Arrest','Robbery, Evading Arrest, Other Agency Arrest','Robbery, Other Felony Arrest, Evading Arrest','Robbery, Take Weapon from PO')='Robbery'")
+
+data$SUBJECT_OFFENSE=recode(data$SUBJECT_OFFENSE,"c('Theft','Theft, Drug Possession - Felony','Theft, Evading Arrest','Theft, Evading Arrest, Drug Possession - Misdemeanor, Warrant/Hold','Theft, Evading Arrest, Other Felony Arrest, Other Misdemeanor Arrest, Drug Possession - Misdemeanor, Warrant/Hold','Theft, Other Misdemeanor Arrest, Evading Arrest','Theft, Public Intoxication, Assault/Public Servant','Theft, Resisting Arrest','Theft, Resisting Arrest, Drug Possession - Felony, Drug Possession - Misdemeanor, Warrant/Hold',
+'Theft, Resisting Search and Transport','Theft, Warrant/Hold')='Theft'")
+
+data$SUBJECT_OFFENSE=recode(data$SUBJECT_OFFENSE,"c('Traffic Violation','Traffic Violation, Criminal Mischief','Traffic Violation, Evading Arrest, Other Misdemeanor Arrest','Traffic Violation, Warrant/Hold','Traffic Violation, Evading Arrest, Resisting Arrest, Other Misdemeanor Arrest','Traffic Violation, Other Misdemeanor Arrest','Traffic Violation, Resisting Arrest','Traffic Violation, Warrant/Hold, Evading Arrest')='Traffic Violation'")
+
+data$SUBJECT_OFFENSE=recode(data$SUBJECT_OFFENSE,"c('Unauthorize Use Vehicle','Unauthorize Use Vehicle, Burglary/Habitation, Evading Arrest','Unauthorize Use Vehicle, Drug Possession - Felony, Evading Arrest','Unauthorize Use Vehicle, Evading Arrest','Unauthorize Use Vehicle, Evading Arrest, Drug Possession - Misdemeanor','Unauthorize Use Vehicle, Evading Arrest, Warrant/Hold','Unauthorize Use Vehicle, Fail to ID','Unauthorize Use Vehicle, Fail to ID, Resisting Arrest, Evading Arrest','Unauthorize Use Vehicle, Resisting Arrest, Drug Possession - Felony, Drug Possession - Misdemeanor','Unauthorize Use Vehicle, Warrant/Hold')='Unauthorize Use Vehicle'")
+
+data$SUBJECT_OFFENSE=recode(data$SUBJECT_OFFENSE,"c('Warrant/Hold','Warrant/Hold, Assault/FV, Other Felony Arrest','Warrant/Hold, Assault/Public Servant','Warrant/Hold, Drug Possession - Felony','Warrant/Hold, Drug Possession - Felony, Drug Possession - Misdemeanor','Warrant/Hold, Drug Possession - Misdemeanor','Warrant/Hold, Drug Possession - Misdemeanor, Public Intoxication','Warrant/Hold, Drug Possession - Misdemeanor, Resisting Arrest','Warrant/Hold, Drug Possession - Misdemeanor, Resisting Search and Transport','Warrant/Hold, Escape, Resisting Arrest','Warrant/Hold, Evading Arrest','Warrant/Hold, Evading Arrest, Drug Possession - Misdemeanor','Warrant/Hold, Evading Arrest, Resisting Arrest, Drug Possession - Misdemeanor','Warrant/Hold, Evading Arrest, Resisting Arrest, Take Weapon from PO','Warrant/Hold, Fail to ID, Resisting Arrest','Warrant/Hold, Fail to ID, Resisting Arrest, Drug Possession - Misdemeanor','Warrant/Hold, Man/Del/Dangerous Drug','Warrant/Hold, Other Felony Arrest','Warrant/Hold, Other Felony Arrest, Drug Possession - Felony','Warrant/Hold, Other Felony Arrest, Other Misdemeanor Arrest','Warrant/Hold, Other Misdemeanor Arrest','Warrant/Hold, Other Misdemeanor Arrest, Assault/Public Servant','Warrant/Hold, Other Misdemeanor Arrest, DWLS, Resisting Arrest','Warrant/Hold, Public Intoxication','Warrant/Hold, Public Intoxication, Resisting Arrest, Crim Trespass/Bldg/Prop','Warrant/Hold, Resisting Arrest','Warrant/Hold, Resisting Arrest, Assault','Warrant/Hold, Resisting Arrest, Drug Possession - Felony','Warrant/Hold, Resisting Arrest, Drug Possession - Felony, Other Misdemeanor Arrest','Warrant/Hold, Resisting Arrest, DWI','Warrant/Hold, Resisting Arrest, Fail to ID, Other Misdemeanor Arrest','Warrant/Hold, Resisting Arrest, Man/Del/Dangerous Drug','Warrant/Hold, Resisting Arrest, Other Felony Arrest','Warrant/Hold, Resisting Arrest, Public Intoxication, Take Weapon from PO, Other Misdemeanor Arrest','Warrant/Hold, Resisting Arrest, Resisting Search and Transport, Fail to ID','Warrant/Hold, Resisting Search and Transport','Warrant/Hold, Resisting Search and Transport, Assault/Public Servant','Warrant/Hold, Resisting Search and Transport, Drug Possession - Misdemeanor',
+'Warrant/Hold, Sexual Assault','Warrant/Hold, Resisting Search and Transport, Other Felony Arrest')='Warrant/Hold'")
+
+data$SUBJECT_OFFENSE=recode(data$SUBJECT_OFFENSE,"c('Prostitution','Prostitution, Resisting Arrest, Assault/Public Servant, Warrant/Hold','Prostitution, Resisting Arrest, Criminal Mischief','Prostitution, Resisting Arrest, Warrant/Hold')='Prostitution'")
+
+data$SUBJECT_OFFENSE=recode(data$SUBJECT_OFFENSE,"c('Man/Del/Dangerous Drug','Man/Del/Dangerous Drug, Drug Possession - Felony','Man/Del/Dangerous Drug, Evading Arrest, Warrant/Hold','Man/Del/Dangerous Drug, Fail to ID, Other Felony Arrest, Warrant/Hold',
+'Man/Del/Dangerous Drug, Resisting Arrest','Man/Del/Dangerous Drug, Resisting Arrest, Other Misdemeanor Arrest')='Man/Del/Dangerous Drug'")
+
+data$SUBJECT_OFFENSE=recode(data$SUBJECT_OFFENSE,"c('CitChargeT','City Ordinance Violation','City Ordinance Violation, Fail to ID','City Ordinance Violation, Public Intoxication, Other Felony Arrest','Curfew Violation, Resisting Arrest','Deadly Conduct','Discharge Firearm','Discharge Firearm, Other Misdemeanor Arrest, Warrant/Hold','DUI, Fail to ID, Warrant/Hold','DUI, Other Misdemeanor Arrest','Escape, Drug Possession - Misdemeanor, DWI, Resisting Arrest','Manifest/Drug Sales, Resisting Arrest, Warrant/Hold','Manifest/Drug Sales, Warrant/Hold, Drug Possession - Misdemeanor, Other Felony Arrest','Pedestrian In Roadway, Fail to ID, Resisting Search and Transport, Man/Del/Dangerous Drug','Sexual Assault, Robbery','Sexual Assault, Warrant/Hold','Sleeping in Public','Sleeping in Public, Curfew Violation, Fail to ID','Take Weapon from PO, Evading Arrest, Resisting Arrest','Take Weapon from PO, Resisting Arrest, Public Intoxication, Warrant/Hold, Other Misdemeanor Arrest')='Others'")
+
+table(data$SUBJECT_OFFENSE)
+
+#converting empty values in LOCATION_LATITUDE and LOCATION_LONGITUDE columns to NA
+data$LOCATION_LATITUDE[data$LOCATION_LATITUDE==""] = NA
+data$LOCATION_LONGITUDE[data$LOCATION_LONGITUDE==""] = NA
+
+#converting empty values in entire dataframe to NA
+data[data==""]=NA
+```
+
+**Introduction**
+
+Crime incidents have become widespread across the Texas in recent times.We have some demographics about the those offenses over the years.The dataset consists of 2383 observations with 47 variables,which describe the incidents occurred between in the city of Dallas. From the dataset, we get to see the behavior of police officers as well as the criminals wrt gender, race ,etc.
+
+```{r,out.width  =  "70%",  warning = FALSE,fig.align='center'}
+##Plot1 -Scatter Plot-officer race
+officer_race_plot=ggplot(data, aes(x=OFFICER_RACE, y=OFFICER_GENDER)) + 
+  geom_jitter(aes(color=OFFICER_RACE))+
+  theme(axis.text.x = element_text(vjust = 0.5, hjust=0.5)) +
+  labs(title = "Race and Gender of the Officers", x ="Officer Race", y="Officer Gender",fill="Officer Race")
+##Plot2 -Scatter Plot-subject race
+subject_race_plot=ggplot(data, aes(x=SUBJECT_RACE, y=SUBJECT_GENDER)) + 
+  geom_jitter(aes(color=SUBJECT_RACE))+
+  theme(axis.text.x = element_text(vjust = 0.5, hjust=0.5)) +
+  labs(title = "Race and Gender of the Offenders", x ="Subject Race", y="Subject Gender",fill="Subject Race")
+grid.arrange(officer_race_plot, subject_race_plot, ncol = 1)
+```
+
+Above scatter plots describes the majority races of the genders for Police officers and the subjects in Dallas. First scatter plot clearly describes that count of white police officers is high as compared to the all other races. Similarly, white female officers have also been hired majorly as compared to black and hispanic officers. The second scatter plot is exactly opposite to the first because, black male and female offenders were high as compared to all other races.
+
+```{r fig2, fig.height = 5, fig.width = 8, fig.align = "center",warning=FALSE}
+#PLOT3-SUB-OFFENSE PLOT
+Subject_offense_plot=data %>%
+  group_by(SUBJECT_OFFENSE) %>%
+  filter(!is.na(SUBJECT_OFFENSE)) %>%
+  summarise(Count = n()) %>%
+  mutate(TotalCount = nrow(data)) %>%
+  mutate(Percentage = (Count/TotalCount) * 100) %>%
+  arrange(desc(Count)) %>%
+  ungroup() %>%
+  mutate(SUBJECT_OFFENSE = reorder(SUBJECT_OFFENSE,Count)) %>%
+  
+  ggplot(aes(x = SUBJECT_OFFENSE,y = Percentage)) +
+  geom_bar(stat='identity',colour="white",fill="maroon") +
+  geom_text(aes(x = SUBJECT_OFFENSE, y = 1, label = paste0("(",round(Percentage,2)," % )",sep="")),
+            hjust=10, vjust=.5, size = 3.5, colour = 'black',fontface = 'bold') +
+  labs(x = 'Offense', y = 'Percentage', title = 'Subject offense Percentage in Texas') +coord_flip() + theme_bw()
+ggplotly(Subject_offense_plot)
+```
+
+Above bar chart clearly explains that Apprehension by Peace Officer Without Warrant (APOWW) stands highest with 15.15%. This is followed by not arresting the offenders, and public intoxication. Top five categories which covers maximum offense rates in Dallas are APOWW, No arrest, Public Intoxication, Assault,Warrant.
+
+```{r fig3, fig.height = 5, fig.width = 6, fig.align = "center",warning=FALSE}
+#PLOT 4 - Distribution plot
+distribution_plot <- ggplot(data_year, aes(count)) + xlim(c(0,30))+
+  geom_density(alpha = 0.5, colour = "black", fill ="red")+ 
+  labs(x="Incident counts", y= "Density", title="Distribuion of incident rates") + theme_bw()
+ggplotly(distribution_plot)
+```
+
+Distribution plot shows the overall distribution counts of the crimes. We do observe a right skewness in the incident count across the year. Incidents more than 20 per day are less obvious and we see a peak of the distribution at around 3 to 5 incidents reported day viewing the incidents in each division.
+
+```{r,include=FALSE,warning = FALSE}
+#Plot 5- Calender plot
+data_month_day <-  data %>%
+  group_by(INCIDENT_DAY, INC_MONTH) %>%
+  summarize(count = n())
+data_month_day <- data_month_day[complete.cases(data_month_day), ]
+```
+
+
+```{r,out.width  =  "70%", warning = FALSE,fig.align='center'}
+calender_plot= ggplot(data_month_day, aes(x= INCIDENT_DAY, y=INC_MONTH,fill = count)) + geom_tile( ) + 
+  geom_text(aes(INCIDENT_DAY, INC_MONTH, label = count), color = "black", size = 4) + 
+  scale_y_discrete("Months",labels=c("January","February", "March", "April","May", "June","July","August", "September","October","November","December")) + 
+  labs(x="Days of Month", y= "Months", title=" Incident Rates across Days and Months")+
+  scale_fill_gradientn(colours = c("#3794bf", "#FFFFFF", "#df8640"))
+ggplotly(calender_plot)
+```
+
+From above calender plot, we can see there have been many incidents every day, every month. But in the month of February, on Sunday, we see highest count of incident occurred in dallas. The count of incident although remained between 10-30 all over the year.
+
+```{r fig5, fig.height = 5, fig.width = 8, fig.align = "center",warning=FALSE}
+#PLOT 6 - Officer rAce capturing Subject race
+capture_plot= ggplot(data,aes(x = OFFICER_RACE,fill = SUBJECT_RACE)) + 
+  geom_bar(position = "dodge") +labs(title= "Officer race capturing subject race",x="Officer Race",fill="Subject Race")
+ggplotly(capture_plot)  
+```
+
+From the above graph, we see that officers of every race (white, black, hispanic) reported high count of Black criminals. This clearly describes racism in the city.
+
+```{r fig6, fig.height = 5, fig.width = 8, fig.align = "center",warning=FALSE}
+#PLOT 7- Subject description plot
+desc_plot = ggplot(data,aes(x = SUBJECT_DESCRIPTION,fill = SUBJECT_RACE)) + 
+  geom_bar(position = "dodge") + labs(title = "Subject arrest depending on Offense", x="Subject Description", fill="Subject Race")+
+  theme(axis.text.x = element_text(size = 6,angle = 45,hjust = 0.5, vjust = 0.5))+facet_grid(~SUBJECT_WAS_ARRESTED)
+ggplotly(desc_plot)    
+```
+
+So far we have seen, that criminals were majorly black and officers were white. Above graph states that there was high consumption of Alcohol/drugs by the criminals who got arrested. Some criminals were also said to be mentally unstable. The ratio of subjects getting arrested was very high when compared with the people who were not arrested, which means many people were not arrested even though they accounted for the crime.
+ 
+```{r fig7, fig.height = 5, fig.width = 8, fig.align = "center",warning=FALSE}
+#PLOT 8- BOX plot for years on force 
+data$OFFICER_YEARS_ON_FORCE=as.numeric(data$OFFICER_YEARS_ON_FORCE)
+
+box_plot= ggplot(data, aes(x = OFFICER_GENDER, y = OFFICER_YEARS_ON_FORCE, fill = OFFICER_GENDER))+
+  geom_boxplot(show.legend = FALSE)+
+  theme_minimal()+
+  scale_fill_manual(values = c("orangered", "steelblue"))+scale_y_continuous(limits=c(0,30))+
+  labs(title = "Box Plot for Officer's Service (in years)",x="Officer Gender",y="Officer years on force")
+ggplotly(box_plot)
+```
+
+Above box plots shows that male police officers served more years on force as compared to female police officers. However, officers served their duty in the range of around 3-10 years maximum. Very few officers devoted their life to this duty.
+
+```{r fig8, fig.height = 5, fig.width = 8, fig.align = "center",warning=FALSE}
+#plot 9- Pie plot for division wise incidents
+tab=table(data$DIVISION)
+lbls <- paste(names(tab), "\n", tab, sep="")
+color=c("green","blue","pink","yellow","maroon","skyblue","grey")
+pie(tab, col=color, labels = lbls,main="Incident count per Texas Divisions")
+```
+
+Above pie plot indicates that highest number of incidents were reported in the Central division of Dallas city and northwest division had very less number of crime incidents. Rest of the divisions including North central,South central, North east, South east, South west reported around 300 crime incidents.
+
+```{r fig9, fig.height = 5, fig.width = 8, fig.align = "center",warning=FALSE}
+#PLOT 10- Pyramid plot for Reason for force
+df_category = sort(table(data$REASON_FOR_FORCE),decreasing = TRUE)
+df_category = data.frame(df_category)
+#df_category = data.frame(df_category[df_category > 1000])
+colnames(df_category) = c("Category", "Frequency")
+df_category$Percentage = df_category$Frequency / sum(df_category$Frequency)
+#view(df_category)
+pyramid_plot <- df_category %>%
+  hchart("pyramid", hcaes(x = Category, y = Frequency),name = "Reason for Force")
+pyramid_plot
+```
+
+Above pyramid plot describes that Arresting criminal was the main reason for police force. Some criminals were causing danger to others and themselves , with active aggression.
+
+```{r fig10, fig.height = 5, fig.width = 8, fig.align = "center",warning=FALSE}
+#Plot 11- Lollipop plot for Officer injury types
+df_category = sort(table(data$OFFICER_INJURY_TYPE),decreasing = TRUE)
+df_category = data.frame(df_category)
+#df_category = data.frame(df_category[df_category > 1000])
+colnames(df_category) = c("Category", "Frequency")
+df_category$Percentage = df_category$Frequency / sum(df_category$Frequency)
+#view(df_category)
+
+Officer_injury_plot= ggplot(df_category, aes(x=Category, y=Frequency)) + 
+  geom_point(size=3) + geom_segment(aes(x=Category, xend=Category,y=0, yend=Frequency)) +  
+  labs(title="Lollipop Chart for Officer Injuries",x="Officer Injuries") +
+  theme(axis.text.x = element_text(size = 8,angle = 45,hjust = 0.5, vjust = 0.5))
+
+ggplotly(Officer_injury_plot)
+```
+
+Above Lollipop graph explains that no injuries were caused to the police officers during crime incidents. However 100 police officers were harmed due to Abrasion, Laceration. Very few police officers were injured due to bite,pain and dizziness.
+
+```{r fig11, fig.height = 5, fig.width = 8, fig.align = "center",warning=FALSE}
+# Plot 12-Subject gender race-Arrest
+gender_arrest= ggplot(data,aes(x=SUBJECT_RACE,y=""))+geom_bar(stat='identity',colour="white",fill="maroon")+facet_grid(SUBJECT_WAS_ARRESTED~SUBJECT_GENDER)+
+  geom_bar(stat='identity',color = "maroon",width = 0.5) +theme_bw()+labs(title="Subject Arrest per Gender-Race",x="subject race",y="Subject Arrested")
+ggplotly(gender_arrest)
+```
+
+Above graph shows that Black male caused major crime incidents and also got arrested. Similarly, Black Female were arrested for accounting for many crime incidents. 
+
+```{r fig12, fig.height = 5, fig.width = 8, fig.align = "center",warning=FALSE}
+# Plot 13-Subject gender offense-Arrest
+Offense_plot = ggplot(data,aes(x=SUBJECT_OFFENSE,y=""))+geom_bar(stat='identity',colour="white",fill="maroon")+facet_grid(SUBJECT_WAS_ARRESTED~SUBJECT_GENDER)+
+  geom_bar(stat='identity',color = "maroon",width = 0.5)+coord_flip()+labs(title="Subject Arrest per Offense-Gender",x="Subject Offense",y="Subject Gender")+
+  theme(axis.text.x = element_text(size = 4,hjust = 0.5, vjust = 0.5))
+ggplotly(Offense_plot)
+```
+
+From above graph, we can see that male subjects got arrested highly due to public intoxication and APOWW and Warrant. Same is the situation for Female criminals. However people not getting arrested is pretty clear due to the high count of No arrest offense.
+
+```{r fig13, fig.height = 5, fig.width = 8, fig.align = "center",warning=FALSE}
+# Plot 14-officer hospitalization
+plot = ggplot(data,aes(x=OFFICER_INJURY,y=""))+geom_bar(stat='identity',colour="white",fill="maroon")+facet_grid(OFFICER_HOSPITALIZATION~OFFICER_GENDER)+
+  geom_bar(stat='identity',color = "maroon",width = 0.5)+labs(title = "Officer Hospitlization per Injury-Gender",x="Officer Injured",y="Officer HOspitalized")
+ggplotly(plot)
+```
+
+From above graph, we see that most of the police officers were not injured in the crime incidents.Therefore no hospitalization was required. Although few police officers were injured who were not hospitalized. 
+
+```{r, include=FALSE,warning=FALSE}
+#plot 15-a map
+shp <-readOGR(dsn = "D:/MA304/EPIC.shp")
+shp
+shp_df <- fortify(shp)
+```
+
+```{r fig14, fig.height = 5, fig.width = 8, fig.align = "center",warning=FALSE}
+shpMap <- ggplot(data = shp_df, aes(long,lat)) +
+  geom_polygon(aes(group = group), fill="red") +
+  coord_equal() +
+  labs(x = "Longitude (Degrees)",
+       y = "Latitude (Degrees)",
+       title = "Map ",
+       subtitle = "Map - Based on the Lat Long in Shape Files")
+shpMap
+```
+
+Above map describes the crime incidents happened in different parts of the city of Dallas.
+
+```{r fig15, fig.height = 5, fig.width = 8, fig.align = "center",warning=FALSE}
+#PLOT16-SUBJECT-INJURY PLOT
+SUBJECT_INJURY_TYPE_plot=data %>%
+  group_by(SUBJECT_INJURY_TYPE) %>%
+  filter(!is.na(SUBJECT_INJURY_TYPE)) %>%
+  summarise(Count = n()) %>%
+  mutate(TotalCount = nrow(data)) %>%
+  mutate(Percentage = (Count/TotalCount) * 100) %>%
+  arrange(desc(Count)) %>%
+  ungroup() %>%
+  mutate(SUBJECT_INJURY_TYPE = reorder(SUBJECT_INJURY_TYPE,Count)) %>%
+  
+  ggplot(aes(x = SUBJECT_INJURY_TYPE,y = Percentage)) +
+  geom_bar(stat='identity',colour="white",fill="maroon") +
+  geom_text(aes(x = SUBJECT_INJURY_TYPE, y = 1, label = paste0("(",round(Percentage,2)," % )",sep="")),
+            hjust=0, vjust=.5, size = 3, colour = 'black',fontface = 'bold') +
+  labs(x = 'Subject Injuries', y = 'Percentage', title = 'Subject injury Percentage in Texas') +coord_flip() + theme_bw()
+ggplotly(SUBJECT_INJURY_TYPE_plot)
+```
+
+From above bar graph, we see that 70.08% of the criminal were not harmed. However few subjects were injured due to Abrasion/Scrape, Laceration/Cut,etc.
+
+**Conclusion**
+
+Altogether, we can say , black people caused most of the crime incidents which were reported by white police officers. However, Monitoring the emotional health, controlling the alcohol/drug abuse can be the potential solution to reduce the crimes in the city of Dallas. Moreover, Checking the severity of injuries and need of hospitalization can save life of many officer and subjects. Figuring out a way to stop the gender and race discrimination is the next challenge in the city of Dallas.
+
+
